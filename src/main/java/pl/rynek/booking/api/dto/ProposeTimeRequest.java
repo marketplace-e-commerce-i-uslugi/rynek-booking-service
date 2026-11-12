@@ -1,7 +1,9 @@
 package pl.rynek.booking.api.dto;
 
-/**
- * Ciało żądania: Propozycja innego terminu. Pola do uzupełnienia razem z kontraktem w rynek-contracts.
- */
-public record ProposeTimeRequest() {
+import java.time.Instant;
+
+import jakarta.validation.constraints.NotNull;
+
+/** Nowy początek usługi; czas trwania zostaje ten sam. */
+public record ProposeTimeRequest(@NotNull(message = "Podaj nowy termin.") Instant start) {
 }

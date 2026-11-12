@@ -2,7 +2,7 @@
 
 `booking-service` — rezerwacje usług
 
-> Status: **szkielet**. Wszystkie endpointy z tabeli istnieją w kontrolerach (`src/main/java/.../api/`) i zwracają `501 Not Implemented` (RFC 7807). Ciała żądań to puste rekordy w `api/dto/`.
+> Status: **rezerwacje działają** (PostgreSQL + Flyway, JWT z JWKS identity): reguły dostępności, wolne sloty, najbliższy termin, rezerwacja z przetrzymaniem na zaliczkę, decyzje usługodawcy, anulowanie ze zwrotem zaliczki, plik `.ics`. Zaliczki obsługuje payment-service (`referenceType: BOOKING`). Resztę ceny klient płaci poza Rynkiem.
 
 ## Uruchomienie
 
@@ -36,6 +36,20 @@ Ekrany: 4 Karta usługi (kalendarz), 8 Rezerwacja usługi.
 | POST | `/api/v1/seller/bookings/{bookingId}/decline` | Odrzucenie | seller |
 | POST | `/api/v1/seller/bookings/{bookingId}/propose-time` | Propozycja innego terminu | seller |
 | POST | `/api/v1/seller/bookings/{bookingId}/complete` | Oznaczenie jako wykonane (uruchamia prośbę o opinię) | seller |
+| POST | `/api/v1/bookings/{bookingId}/accept-proposal` | Klient przyjmuje termin zaproponowany przez usługodawcę (dodane poza dokumentem architektury) | user |
+| GET | `/internal/bookings/{bookingId}`, `/internal/bookings?ids=` | Zaliczka, klient, usługodawca i status dla payment-service | int |
+| POST | `/internal/bookings/{bookingId}/mark-paid` | Zaliczka wpłacona: „Czeka na zaliczkę” → „Oczekuje” | int |
+
+### Zasady
+
+- Dostępność usługi (oferty typu Usługa) ustawia jej właściciel: `{weekly: [{day 1–7 (0 = niedziela), from "HH:mm", to}], exceptions: [{date, closed}], slotMinutes 15–480 co 15}`. Godziny są w strefie Europe/Warsaw (`rynek.bookings.zone`), więc zmiana czasu ich nie przesuwa. Bez zapisanych reguł obowiązują pon.–pt. 9–17, a slot to czas trwania usługi z katalogu. Slot jest zarazem czasem jednej rezerwacji.
+- `GET /slots?from=&to=` (ISO 8601, najwyżej 62 dni, domyślnie 14 dni od teraz) zwraca sloty wolne i zajęte (`{start, end, free}`). Slot jest zajęty, gdy nachodzi na aktywną rezerwację. Przeszłość i dni zamknięte są pomijane. `next-slot` szuka w ciągu 60 dni. Obie ścieżki są publiczne, tylko dla opublikowanych usług z cennikiem (inaczej 404).
+- `POST /bookings {offerId, start, address, notes?}` z `Idempotency-Key`: `start` musi być wolnym slotem (inaczej 409), a własnej usługi nie można zarezerwować. Indeks w bazie nie pozwala zająć jednego slotu dwa razy. Cena szacunkowa to cena „od” razy czas usługi w godzinach (jednostka „godz.”), w innych jednostkach cena „od”. Zaliczka to procent z cennika. Tytuł, kanał, imię klienta (identity) i ceny są kopią z chwili rezerwacji.
+- Statusy: „Czeka na zaliczkę” (z zaliczką, przetrzymanie `rynek.bookings.deposit-hold` = 10 min) → (wpłata) „Oczekuje” → „Potwierdzona” (`accept`) albo „Inny termin” (`propose-time`, potem klient `accept-proposal` → „Potwierdzona”) → „Wykonana” (`complete`, po terminie usługi; `rynek.bookings.complete-early=true` tylko do testów). Bez zaliczki rezerwacja od razu „Oczekuje”. Nieopłacone przetrzymanie wygasa (sprawdzenie co minutę) i zwalnia termin.
+- Anulować może klient i usługodawca (`/cancel`, opcjonalny `reason`), przed terminem potwierdzonej usługi. `decline` to anulowanie przez usługodawcę rezerwacji czekającej na decyzję. Każde anulowanie (także wygaśnięcie) trafia do payment-service (`POST /internal/bookings/{id}/cancelled`): wpłacona zaliczka wraca w całości, a płatność w toku jest nieudana. Gdy payment-service nie odpowiada, zgłoszenie jest ponawiane co minutę (`payment_notified`). Zasady zatrzymania zaliczki przy późnym anulowaniu to decyzja biznesowa, na razie zaliczka zawsze wraca.
+- Usługodawca nie widzi rezerwacji czekających na zaliczkę. Jego lista jest od najbliższego terminu (`from` filtruje), a lista klienta od najpóźniejszego.
+- `calendar.ics`: wydarzenie iCalendar (UTC) dla klienta i usługodawcy.
+- `Booking` ma więcej pól niż kształt z frontendu: `end`, `requestedStart` (termin klienta przy propozycji), `holdUntil`, `cancelReason`, `paymentId`.
 
 ## Zdarzenia Kafka
 
@@ -48,8 +62,8 @@ Wiersze z §17, w których występuje `booking` (publikuje lub słucha).
 
 ## Dane i zależności
 
-- **Magazyn danych:** PostgreSQL
-- **Zależności:** catalog-service, payment-service
+- **Magazyn danych:** PostgreSQL (baza `bookings`, Flyway)
+- **Zależności:** catalog-service (`GET /internal/offers/{id}/price-and-stock` z cennikiem usługi), channel-service (nagłówek usługodawcy), identity-service (imię klienta), payment-service (`POST /internal/bookings/{id}/cancelled`); payment-service woła `/internal/bookings/**`
 - **Kontrakty:** `rynek-contracts/openapi/` i `rynek-contracts/events/`
 - **Lokalne uruchomienie:** `rynek-infra/local/`
 

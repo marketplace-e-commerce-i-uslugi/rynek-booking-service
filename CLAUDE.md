@@ -2,7 +2,7 @@
 
 Mikroserwis platformy **Rynek**: `booking-service` — rezerwacje usług
 
-Zakres, endpointy i zdarzenia są opisane w `README.md`. Na razie to szkielet: endpointy zwracają 501, DTO są puste. Nie dodawaj logiki bez wyraźnej prośby.
+Zakres, endpointy i zdarzenia są opisane w `README.md`. Rezerwacje działają (PostgreSQL + Flyway, JWT z JWKS identity): dostępność, sloty, rezerwacja z przetrzymaniem na zaliczkę, decyzje usługodawcy, anulowanie ze zwrotem zaliczki przez payment-service. Nie dodawaj logiki bez wyraźnej prośby.
 
 ## Wspólne konwencje API (§1 dokumentu architektury)
 
@@ -24,7 +24,7 @@ Legenda kolumny **Dostęp**: `pub` = bez logowania, `user` = zalogowany, `seller
 ## Stack
 
 - Java 25, Spring Boot 4.1 (Maven, `./mvnw`)
-- Dane: PostgreSQL
+- Dane: PostgreSQL (Flyway); testy na Testcontainers
 - Zdarzenia: Kafka, nazwy `domena.zdarzenie`
 
 ## Powiązane repozytoria
@@ -35,6 +35,6 @@ Legenda kolumny **Dostęp**: `pub` = bez logowania, `user` = zalogowany, `seller
 
 ## Struktura kodu
 
-- `pl.rynek.booking.api`: kontrolery REST (pełne ścieżki w adnotacjach), `api.dto`: rekordy żądań, `common.NotImplemented`: odpowiedź 501
+- `pl.rynek.booking.api`: kontrolery REST (pełne ścieżki w adnotacjach), `.ics`, widoki z kanałami; `api.dto`: rekordy żądań i odpowiedzi; `availability`: reguły, `SlotCalendar` (sloty w strefie Europe/Warsaw); `bookings`: rezerwacja, statusy, przetrzymanie, zgłoszenia do payment; `clients`: catalog, channel, identity, payment; `config`: security, błędy RFC 7807 po polsku
 - Konfiguracja: `src/main/resources/application.yml`
 - Port lokalny: 8093

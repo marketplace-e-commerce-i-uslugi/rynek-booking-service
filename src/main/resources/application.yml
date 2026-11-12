@@ -4,6 +4,40 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  datasource:
+    # Lokalnie: rynek-infra/local (docker compose). Inne środowiska ustawiają zmienne.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/bookings}
+    username: ${DB_USER:bookings}
+    password: ${DB_PASSWORD:bookings}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Schemat zakłada Flyway (db/migration); Hibernate tylko sprawdza zgodność encji.
+      ddl-auto: validate
+
+rynek:
+  catalog:
+    url: ${CATALOG_SERVICE_URL:http://localhost:8083}
+  channel:
+    url: ${CHANNEL_SERVICE_URL:http://localhost:8082}
+  identity:
+    url: ${IDENTITY_SERVICE_URL:http://localhost:8081}
+  payment:
+    url: ${PAYMENT_SERVICE_URL:http://localhost:8092}
+  bookings:
+    # Godziny pracy usługodawców i terminy w kalendarzu liczymy w tej strefie.
+    zone: Europe/Warsaw
+    # Przetrzymanie terminu na wpłatę zaliczki; potem rezerwacja wygasa.
+    deposit-hold: ${BOOKINGS_DEPOSIT_HOLD:10m}
+    expiry-check: 60s
+    # Ponawianie zgłoszeń anulowania do payment-service (zwrot zaliczki).
+    payment-retry: 60s
+    # true: usługodawca może oznaczyć usługę jako wykonaną przed jej terminem (tylko do testów lokalnych).
+    complete-early: ${BOOKINGS_COMPLETE_EARLY:false}
+  jwt:
+    # Klucze publiczne pobierane leniwie przy pierwszym tokenie, więc serwis startuje bez działającego identity.
+    jwk-set-uri: ${IDENTITY_SERVICE_URL:http://localhost:8081}/internal/auth/jwks
+    issuer: ${JWT_ISSUER:rynek-identity}
 
 server:
   port: ${PORT:8093}
