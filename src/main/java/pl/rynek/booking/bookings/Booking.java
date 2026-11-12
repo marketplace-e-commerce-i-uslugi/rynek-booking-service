@@ -86,6 +86,9 @@ public class Booking {
     @Column(name = "idempotency_key")
     private String idempotencyKey;
 
+    /** engagement-service zapisał opinię klienta o tej rezerwacji. */
+    private boolean reviewed;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -138,6 +141,10 @@ public class Booking {
             this.holdUntil = null;
             move(BookingStatus.REQUESTED, now);
         }
+    }
+
+    void markReviewed() {
+        reviewed = true;
     }
 
     void accept(Instant now) {
@@ -270,6 +277,10 @@ public class Booking {
 
     public Instant getHoldUntil() {
         return holdUntil;
+    }
+
+    public boolean isReviewed() {
+        return reviewed;
     }
 
     public UUID getPaymentId() {

@@ -168,6 +168,11 @@ public class BookingService {
         return change(bookingId, b -> true, b -> b.markPaid(paymentId, clock.instant()));
     }
 
+    /** engagement-service zapisał opinię o rezerwacji. Ponowienie niczego nie zmienia. */
+    public Booking markReviewed(UUID bookingId) {
+        return change(bookingId, b -> true, Booking::markReviewed);
+    }
+
     public Booking internal(UUID bookingId) {
         return find(bookingId, b -> true);
     }

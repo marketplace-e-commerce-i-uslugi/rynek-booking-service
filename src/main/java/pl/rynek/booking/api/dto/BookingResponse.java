@@ -18,6 +18,6 @@ public record BookingResponse(UUID id, UUID offerId, String offerTitle, ChannelR
     public static BookingResponse of(Booking b, ChannelRef channel) {
         return new BookingResponse(b.getId(), b.getOfferId(), b.getOfferTitle(), channel, b.getCustomerName(), b.getStart(), b.getEnd(),
                 b.getRequestedStart(), b.getAddress(), b.getNotes(), b.getStatus(), MoneyDto.pln(b.getEstimatedPrice()),
-                MoneyDto.pln(b.getDeposit()), b.getHoldUntil(), b.getCancelReason(), b.getPaymentId(), false);
+                MoneyDto.pln(b.getDeposit()), b.getHoldUntil(), b.getCancelReason(), b.getPaymentId(), b.isReviewed());
     }
 }
