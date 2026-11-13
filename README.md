@@ -64,7 +64,7 @@ Wiersze z §17, w których występuje `booking` (publikuje lub słucha).
 ## Dane i zależności
 
 - **Magazyn danych:** PostgreSQL (baza `bookings`, Flyway)
-- **Zależności:** catalog-service (`GET /internal/offers/{id}/price-and-stock` z cennikiem usługi), channel-service (nagłówek usługodawcy), identity-service (imię klienta), payment-service (`POST /internal/bookings/{id}/cancelled`); payment-service woła `/internal/bookings/**`, catalog-service woła `/internal/services/next-slots` (pole `nextSlot` kart)
+- **Zależności:** catalog-service (`GET /internal/offers/{id}/price-and-stock` z cennikiem usługi), channel-service (nagłówek usługodawcy), identity-service (imię klienta), payment-service (`POST /internal/bookings/{id}/cancelled`); payment-service woła `/internal/bookings/**`, catalog-service woła `/internal/services/next-slots` (pole `nextSlot` kart); notification-service (`POST /internal/notifications`, best effort: usługodawca dowiaduje się o rezerwacji dopiero po wpłacie zaliczki, o przyjętym nowym terminie i anulowaniu przez klienta, klient o potwierdzeniu, nowym terminie, wykonaniu, odwołaniu i wygaśnięciu; adres w `NOTIFICATION_SERVICE_URL`)
 - **Kontrakty:** `rynek-contracts/openapi/` i `rynek-contracts/events/`
 - **Lokalne uruchomienie:** `rynek-infra/local/`
 

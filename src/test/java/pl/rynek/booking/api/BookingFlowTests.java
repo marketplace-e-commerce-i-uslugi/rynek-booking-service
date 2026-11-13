@@ -5,7 +5,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -48,6 +52,7 @@ import pl.rynek.booking.clients.CatalogClient.OfferInfo;
 import pl.rynek.booking.clients.CatalogClient.Service;
 import pl.rynek.booking.clients.ChannelClient;
 import pl.rynek.booking.clients.IdentityClient;
+import pl.rynek.booking.clients.NotificationClient;
 import pl.rynek.booking.clients.PaymentClient;
 
 /**
@@ -85,6 +90,9 @@ class BookingFlowTests {
 
     @MockitoBean
     PaymentClient payment;
+
+    @MockitoBean
+    NotificationClient notifications;
 
     final Map<UUID, OfferInfo> offers = new ConcurrentHashMap<>();
 
@@ -241,6 +249,51 @@ class BookingFlowTests {
         cancel(provider, id, null).andExpect(jsonPath("$.status").value("Anulowana"))
                 .andExpect(jsonPath("$.cancelReason").value("Usługodawca anulował rezerwację."));
         mvc.perform(post("/internal/bookings/" + id + "/mark-paid")).andExpect(status().isConflict());
+    }
+
+    /** Powiadomienia w dzwonku: usługodawca widzi rezerwację dopiero po zaliczce, klient dostaje decyzje usługodawcy. */
+    @Test
+    void bookingChangesAreReportedToNotificationService() throws Exception {
+        UUID provider = UUID.randomUUID();
+        UUID customer = UUID.randomUUID();
+        UUID offer = service(provider, 2500, "m²", 240, 20);
+        setAvailability(provider, offer, EVERY_DAY).andExpect(status().isOk());
+        String id = JsonPath.read(book(customer, "n1", offer, freeSlot(offer, 0)).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        // Czeka na zaliczkę: usługodawca jeszcze o niej nie wie.
+        verify(notifications, never()).send(any(), anyString(), anyString(), anyString(), any(), any());
+
+        mvc.perform(post("/internal/bookings/" + id + "/mark-paid").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"paymentId\":\"" + UUID.randomUUID() + "\"}")).andExpect(status().isOk());
+        verify(notifications, atLeastOnce()).send(eq(provider), eq("bookings"), eq("Malowanie ścian"), startsWith("Nowa rezerwacja na "),
+                eq("/sprzedawca/rezerwacje"), eq("booking-" + id + "-requested-provider"));
+
+        String other = freeSlot(offer, 2);
+        mvc.perform(post("/api/v1/seller/bookings/" + id + "/propose-time").header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"start\":\"" + other + "\"}")).andExpect(status().isOk());
+        verify(notifications).send(eq(customer), eq("bookings"), eq("Malowanie ścian"), startsWith("Usługodawca proponuje inny termin: "),
+                eq("/profil/rezerwacje"), startsWith("booking-" + id + "-proposed-"));
+        mvc.perform(post("/api/v1/bookings/" + id + "/accept-proposal").header(HttpHeaders.AUTHORIZATION, bearer(customer))).andExpect(status().isOk());
+        verify(notifications).send(eq(provider), eq("bookings"), eq("Malowanie ścian"), startsWith("Klient przyjął nowy termin"),
+                eq("/sprzedawca/rezerwacje"), eq("booking-" + id + "-proposal-accepted-provider"));
+
+        cancel(provider, id, null).andExpect(status().isOk());
+        verify(notifications).send(eq(customer), eq("bookings"), eq("Malowanie ścian"), startsWith("Usługodawca anulował rezerwację"),
+                eq("/profil/rezerwacje"), eq("booking-" + id + "-cancelled"));
+
+        // Bez zaliczki rezerwacja trafia do usługodawcy od razu; potwierdzenie idzie do klienta, anulowanie klienta do usługodawcy.
+        UUID free = service(provider, 15000, "godz.", 120, 0);
+        setAvailability(provider, free, EVERY_DAY).andExpect(status().isOk());
+        String second = JsonPath.read(book(customer, "n2", free, freeSlot(free, 0)).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        verify(notifications).send(eq(provider), eq("bookings"), anyString(), startsWith("Nowa rezerwacja na "),
+                eq("/sprzedawca/rezerwacje"), eq("booking-" + second + "-requested-provider"));
+        seller(provider, second, "accept").andExpect(status().isOk());
+        verify(notifications).send(eq(customer), eq("bookings"), anyString(), startsWith("Usługodawca potwierdził rezerwację"),
+                eq("/profil/rezerwacje"), eq("booking-" + second + "-accepted"));
+        cancel(customer, second, null).andExpect(status().isOk());
+        verify(notifications).send(eq(provider), eq("bookings"), anyString(), startsWith("Klient anulował rezerwację"),
+                eq("/sprzedawca/rezerwacje"), eq("booking-" + second + "-cancelled-provider"));
     }
 
     @Test

@@ -24,6 +24,8 @@ rynek:
     url: ${IDENTITY_SERVICE_URL:http://localhost:8081}
   payment:
     url: ${PAYMENT_SERVICE_URL:http://localhost:8092}
+  notification:
+    url: ${NOTIFICATION_SERVICE_URL:http://localhost:8095}
   bookings:
     # Godziny pracy usługodawców i terminy w kalendarzu liczymy w tej strefie.
     zone: Europe/Warsaw

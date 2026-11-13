@@ -42,19 +42,21 @@ public class BookingService {
     private final AvailabilityService availability;
     private final IdentityClient identity;
     private final PaymentClient payment;
+    private final BookingNotifications notices;
     private final TransactionTemplate transaction;
     private final Clock clock;
     private final Duration depositHold;
     private final boolean completeEarly;
 
     public BookingService(BookingRepository bookings, AvailabilityService availability, IdentityClient identity, PaymentClient payment,
-                          PlatformTransactionManager transactions, Clock clock,
+                          BookingNotifications notices, PlatformTransactionManager transactions, Clock clock,
                           @Value("${rynek.bookings.deposit-hold:10m}") Duration depositHold,
                           @Value("${rynek.bookings.complete-early:false}") boolean completeEarly) {
         this.bookings = bookings;
         this.availability = availability;
         this.identity = identity;
         this.payment = payment;
+        this.notices = notices;
         this.transaction = new TransactionTemplate(transactions);
         this.clock = clock;
         this.depositHold = depositHold;
@@ -91,12 +93,15 @@ public class BookingService {
         Booking booking = new Booking(new Booking.Draft(offer.offerId(), offer.title(), offer.channelId(), offer.ownerId(), customerId, name,
                 slot.start(), slot.end(), request.address().trim(), blankToNull(request.notes()), estimate, deposit),
                 idempotencyKey, depositHold, clock.instant());
+        Booking saved;
         try {
-            return transaction.execute(status -> bookings.saveAndFlush(booking));
+            saved = transaction.execute(status -> bookings.saveAndFlush(booking));
         } catch (DataIntegrityViolationException e) {
             // Ten sam klucz równolegle albo ktoś właśnie zajął slot.
             return bookings.findByCustomerIdAndIdempotencyKey(customerId, idempotencyKey).orElseThrow(BookingService::slotTaken);
         }
+        notices.requested(saved);
+        return saved;
     }
 
     static long estimate(OfferInfo offer) {
@@ -128,7 +133,9 @@ public class BookingService {
     }
 
     public Booking accept(UUID providerId, UUID bookingId) {
-        return change(bookingId, provider(providerId), b -> b.accept(clock.instant()));
+        Booking accepted = change(bookingId, provider(providerId), b -> b.accept(clock.instant()));
+        notices.accepted(accepted);
+        return accepted;
     }
 
     public Booking decline(UUID providerId, UUID bookingId) {
@@ -149,23 +156,31 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "W tym terminie masz już inną rezerwację tej usługi.");
         }
         try {
-            return change(bookingId, provider(providerId), x -> x.propose(newStart, length, clock.instant()));
+            Booking proposed = change(bookingId, provider(providerId), x -> x.propose(newStart, length, clock.instant()));
+            notices.proposed(proposed);
+            return proposed;
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "W tym terminie masz już inną rezerwację tej usługi.");
         }
     }
 
     public Booking acceptProposal(UUID customerId, UUID bookingId) {
-        return change(bookingId, b -> b.getCustomerId().equals(customerId), b -> b.acceptProposal(clock.instant()));
+        Booking accepted = change(bookingId, b -> b.getCustomerId().equals(customerId), b -> b.acceptProposal(clock.instant()));
+        notices.proposalAccepted(accepted);
+        return accepted;
     }
 
     public Booking complete(UUID providerId, UUID bookingId) {
-        return change(bookingId, provider(providerId), b -> b.complete(completeEarly, clock.instant()));
+        Booking completed = change(bookingId, provider(providerId), b -> b.complete(completeEarly, clock.instant()));
+        notices.completed(completed);
+        return completed;
     }
 
     /** Zaliczka wpłacona (payment-service). */
     public Booking markPaid(UUID bookingId, UUID paymentId) {
-        return change(bookingId, b -> true, b -> b.markPaid(paymentId, clock.instant()));
+        Booking paid = change(bookingId, b -> true, b -> b.markPaid(paymentId, clock.instant()));
+        notices.requested(paid);
+        return paid;
     }
 
     /** engagement-service zapisał opinię o rezerwacji. Ponowienie niczego nie zmienia. */
@@ -201,7 +216,7 @@ public class BookingService {
     }
 
     private Booking cancelled(UUID bookingId, Predicate<Booking> allowed, CancelledBy by, String reason) {
-        change(bookingId, allowed, b -> b.cancel(by, reason, clock.instant()));
+        notices.cancelled(change(bookingId, allowed, b -> b.cancel(by, reason, clock.instant())), by);
         return notifyPayment(bookingId);
     }
 
