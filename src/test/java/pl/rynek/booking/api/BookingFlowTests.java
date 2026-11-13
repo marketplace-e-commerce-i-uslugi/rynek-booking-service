@@ -125,6 +125,22 @@ class BookingFlowTests {
     }
 
     @Test
+    void internalNextSlotsAnswerManyServicesAtOnce() throws Exception {
+        UUID provider = UUID.randomUUID();
+        UUID open = service(provider, 15000, "godz.", 120, 0);
+        UUID noRules = service(provider, 15000, "godz.", 120, 0);
+        setAvailability(provider, open, EVERY_DAY).andExpect(status().isOk());
+        UUID unknown = UUID.randomUUID();
+        String ids = open + "," + noRules + "," + unknown;
+        String body = mvc.perform(get("/internal/services/next-slots").param("ids", ids)).andExpect(status().isOk())
+                .andExpect(jsonPath("$['" + open + "']").exists())
+                .andExpect(jsonPath("$['" + unknown + "']").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(Instant.parse(JsonPath.read(body, "$['" + open + "']"))).isAfter(Instant.now().minusSeconds(1));
+        mvc.perform(get("/internal/services/next-slots")).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void bookingWithoutDepositFromRequestToCancellation() throws Exception {
         UUID provider = UUID.randomUUID();
         UUID customer = UUID.randomUUID();
@@ -150,7 +166,10 @@ class BookingFlowTests {
         book(customer, "k4", offer, "2020-01-01T09:00:00Z").andExpect(status().isConflict());
         mvc.perform(get("/api/v1/services/" + offer + "/slots").param("from", start).param("to", start))
                 .andExpect(jsonPath("$[0].free").value(false));
-        mvc.perform(get("/api/v1/services/" + offer + "/next-slot")).andExpect(jsonPath("$.start").value(freeSlot(offer, 0)));
+        // next-slot liczy od "teraz", a freeSlot od "teraz + 2 h": w godzinach pracy pierwszy wolny slot to nie ten sam.
+        String next = JsonPath.read(mvc.perform(get("/api/v1/services/" + offer + "/next-slot")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(), "$.start");
+        assertThat(Instant.parse(next)).isAfter(Instant.now().minusSeconds(1)).isBeforeOrEqualTo(Instant.parse(freeSlot(offer, 0)));
 
         mvc.perform(get("/api/v1/seller/bookings").header(HttpHeaders.AUTHORIZATION, bearer(provider)))
                 .andExpect(jsonPath("$.items", hasSize(1))).andExpect(jsonPath("$.items[0].status").value("Oczekuje"));

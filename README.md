@@ -38,6 +38,7 @@ Ekrany: 4 Karta usługi (kalendarz), 8 Rezerwacja usługi.
 | POST | `/api/v1/seller/bookings/{bookingId}/complete` | Oznaczenie jako wykonane (uruchamia prośbę o opinię) | seller |
 | POST | `/api/v1/bookings/{bookingId}/accept-proposal` | Klient przyjmuje termin zaproponowany przez usługodawcę (dodane poza dokumentem architektury) | user |
 | GET | `/internal/bookings/{bookingId}`, `/internal/bookings?ids=` | Zaliczka, klient, usługodawca i status dla payment-service | int |
+| GET | `/internal/services/next-slots?ids=` | Najbliższe wolne terminy wielu usług (do 100): mapa `offerId → Instant`, bez usług bez terminu i niedostępnych (catalog, karty ofert) | int |
 | POST | `/internal/bookings/{bookingId}/mark-paid` | Zaliczka wpłacona: „Czeka na zaliczkę” → „Oczekuje” | int |
 
 ### Zasady
@@ -63,7 +64,7 @@ Wiersze z §17, w których występuje `booking` (publikuje lub słucha).
 ## Dane i zależności
 
 - **Magazyn danych:** PostgreSQL (baza `bookings`, Flyway)
-- **Zależności:** catalog-service (`GET /internal/offers/{id}/price-and-stock` z cennikiem usługi), channel-service (nagłówek usługodawcy), identity-service (imię klienta), payment-service (`POST /internal/bookings/{id}/cancelled`); payment-service woła `/internal/bookings/**`
+- **Zależności:** catalog-service (`GET /internal/offers/{id}/price-and-stock` z cennikiem usługi), channel-service (nagłówek usługodawcy), identity-service (imię klienta), payment-service (`POST /internal/bookings/{id}/cancelled`); payment-service woła `/internal/bookings/**`, catalog-service woła `/internal/services/next-slots` (pole `nextSlot` kart)
 - **Kontrakty:** `rynek-contracts/openapi/` i `rynek-contracts/events/`
 - **Lokalne uruchomienie:** `rynek-infra/local/`
 
