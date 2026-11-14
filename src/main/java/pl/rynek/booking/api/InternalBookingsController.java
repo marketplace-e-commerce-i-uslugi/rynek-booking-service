@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import pl.rynek.booking.api.dto.SaleResponse;
 import pl.rynek.booking.bookings.Booking;
 import pl.rynek.booking.bookings.BookingService;
 
@@ -40,6 +41,19 @@ public class InternalBookingsController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Najwyżej " + MAX_BATCH + " rezerwacji naraz.");
         }
         return bookings.internal(ids).stream().map(InternalBooking::of).toList();
+    }
+
+    /**
+     * Sprzedaż kanału dla analytics-service: usługi oznaczone jako wykonane z terminem w {@code [from, to)}. Przedział najwyżej
+     * 400 dni. Dostęp: int.
+     */
+    @GetMapping("/internal/analytics/sales")
+    public List<SaleResponse> getSales(@RequestParam UUID channelId, @RequestParam java.time.Instant from, @RequestParam java.time.Instant to) {
+        if (!to.isAfter(from) || java.time.Duration.between(from, to).toDays() > 400) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Podaj przedział od–do, najwyżej 400 dni.");
+        }
+        return bookings.completedSales(channelId, from, to).stream()
+                .map(b -> new SaleResponse(b.getId(), b.getStart(), b.getEstimatedPrice(), b.getOfferId())).toList();
     }
 
     /** Zaliczka wpłacona: „Czeka na zaliczkę” → „Oczekuje”. Ponowienie nic nie zmienia, anulowana daje 409. */

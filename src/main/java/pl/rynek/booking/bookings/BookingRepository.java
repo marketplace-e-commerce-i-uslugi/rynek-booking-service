@@ -37,4 +37,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     List<UUID> findPaymentUnnotified();
 
     List<Booking> findByIdIn(Collection<UUID> ids);
+
+    /** Wykonane usługi kanału z terminem w przedziale {@code [from, to)} (sprzedaż dla analytics-service). */
+    @Query("select b from Booking b where b.channelId = :channelId and b.status = pl.rynek.booking.bookings.BookingStatus.COMPLETED"
+            + " and b.startAt >= :from and b.startAt < :to order by b.startAt, b.id")
+    List<Booking> findCompletedOfChannel(UUID channelId, Instant from, Instant to);
 }

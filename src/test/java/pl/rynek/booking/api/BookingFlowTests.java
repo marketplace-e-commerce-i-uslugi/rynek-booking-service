@@ -68,6 +68,9 @@ class BookingFlowTests {
             .map(d -> "{\"day\":" + d + ",\"from\":\"08:00\",\"to\":\"20:00\"}").toList()) + "],\"exceptions\":[],\"slotMinutes\":60}";
 
     @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
     MockMvc mvc;
 
     @Autowired
@@ -252,6 +255,30 @@ class BookingFlowTests {
     }
 
     /** Powiadomienia w dzwonku: usługodawca widzi rezerwację dopiero po zaliczce, klient dostaje decyzje usługodawcy. */
+    @Test
+    void salesForAnalyticsAreCompletedServicesWithTheirTermInTheRange() throws Exception {
+        UUID provider = UUID.randomUUID();
+        UUID customer = UUID.randomUUID();
+        UUID offer = service(provider, 15000, "godz.", 120, 0);
+        setAvailability(provider, offer, EVERY_DAY).andExpect(status().isOk());
+        String done = JsonPath.read(book(customer, "a1", offer, freeSlot(offer, 0)).andReturn().getResponse().getContentAsString(), "$.id");
+        String pending = JsonPath.read(book(customer, "a2", offer, freeSlot(offer, 1)).andReturn().getResponse().getContentAsString(), "$.id");
+        // „Wykonana” wymaga terminu w przeszłości, więc przesuwamy rezerwację w bazie.
+        jdbc.update("update bookings set status = 'COMPLETED', start_at = now() - interval '2 hours', end_at = now() - interval '1 hour' where id = ?::uuid", done);
+
+        UUID channel = jdbc.queryForObject("select channel_id from bookings where id = ?::uuid", UUID.class, done);
+        String from = Instant.now().minusSeconds(86400).toString();
+        String to = Instant.now().plusSeconds(3600).toString();
+        mvc.perform(get("/internal/analytics/sales").param("channelId", channel.toString()).param("from", from).param("to", to))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1))).andExpect(jsonPath("$[0].id").value(done))
+                .andExpect(jsonPath("$[0].amount").value(30000)).andExpect(jsonPath("$[0].offerId").value(offer.toString()));
+        mvc.perform(get("/internal/analytics/sales").param("channelId", UUID.randomUUID().toString()).param("from", from).param("to", to))
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/internal/analytics/sales").param("channelId", channel.toString()).param("from", to).param("to", from))
+                .andExpect(status().isBadRequest());
+        assertThat(pending).isNotEqualTo(done);
+    }
+
     @Test
     void bookingChangesAreReportedToNotificationService() throws Exception {
         UUID provider = UUID.randomUUID();

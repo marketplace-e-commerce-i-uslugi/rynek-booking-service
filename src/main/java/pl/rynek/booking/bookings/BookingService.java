@@ -196,6 +196,11 @@ public class BookingService {
         return bookings.findByIdIn(ids);
     }
 
+    /** Wykonane usługi kanału z terminem w {@code [from, to)}: sprzedaż w statystykach sprzedawcy (analytics-service). */
+    public List<Booking> completedSales(UUID channelId, Instant from, Instant to) {
+        return bookings.findCompletedOfChannel(channelId, from, to);
+    }
+
     /** Rezerwacje bez wpłaconej zaliczki wygasają i zwalniają termin. Wpłata w międzyczasie wygrywa (blokada wersji). */
     @Scheduled(fixedDelayString = "${rynek.bookings.expiry-check:60s}", initialDelayString = "${rynek.bookings.expiry-check:60s}")
     public void expireHolds() {

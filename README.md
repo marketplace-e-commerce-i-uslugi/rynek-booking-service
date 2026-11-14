@@ -2,7 +2,7 @@
 
 `booking-service` — rezerwacje usług
 
-> Status: **rezerwacje działają** (PostgreSQL + Flyway, JWT z JWKS identity): reguły dostępności, wolne sloty, najbliższy termin, rezerwacja z przetrzymaniem na zaliczkę, decyzje usługodawcy, anulowanie ze zwrotem zaliczki, plik `.ics`. Zaliczki obsługuje payment-service (`referenceType: BOOKING`). Resztę ceny klient płaci poza Rynkiem.
+> Status: **rezerwacje działają** (PostgreSQL + Flyway, JWT z JWKS identity): reguły dostępności, wolne sloty, najbliższy termin, rezerwacja z przetrzymaniem na zaliczkę, decyzje usługodawcy, anulowanie ze zwrotem zaliczki, plik `.ics`. Zaliczki obsługuje payment-service (`referenceType: BOOKING`). Resztę ceny klient płaci poza Rynkiem. Dla analytics-service: `GET /internal/analytics/sales?channelId=&from=&to=` oddaje usługi kanału oznaczone jako wykonane z terminem w przedziale: `{id, at (termin), amount (cena w groszach), offerId}`, przedział najwyżej 400 dni.
 
 ## Uruchomienie
 
