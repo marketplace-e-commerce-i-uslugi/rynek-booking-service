@@ -33,6 +33,10 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("select b.id from Booking b where b.status = pl.rynek.booking.bookings.BookingStatus.AWAITING_DEPOSIT and b.holdUntil < :now")
     List<UUID> findHoldExpired(Instant now);
 
+    /** Rezerwacje, które czekają na decyzję usługodawcy (albo klienta przy innym terminie), a ich termin już minął. */
+    @Query("select b.id from Booking b where b.status in (pl.rynek.booking.bookings.BookingStatus.REQUESTED, pl.rynek.booking.bookings.BookingStatus.PROPOSED) and b.startAt < :now")
+    List<UUID> findUndecidedPast(Instant now);
+
     @Query("select b.id from Booking b where b.paymentNotified = false order by b.updatedAt")
     List<UUID> findPaymentUnnotified();
 

@@ -149,6 +149,9 @@ public class Booking {
 
     void accept(Instant now) {
         require(BookingStatus.REQUESTED, "Zaakceptować można rezerwację, która czeka na Twoją decyzję.");
+        if (!startAt.isAfter(now)) {
+            throw conflict("Termin tej rezerwacji już minął. Zaproponuj inny termin albo ją odrzuć.");
+        }
         move(BookingStatus.CONFIRMED, now);
     }
 
@@ -170,6 +173,9 @@ public class Booking {
 
     void acceptProposal(Instant now) {
         require(BookingStatus.PROPOSED, "Usługodawca nie zaproponował innego terminu.");
+        if (!startAt.isAfter(now)) {
+            throw conflict("Zaproponowany termin już minął.");
+        }
         move(BookingStatus.CONFIRMED, now);
     }
 

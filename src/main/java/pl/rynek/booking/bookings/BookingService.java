@@ -215,6 +215,23 @@ public class BookingService {
         }
     }
 
+    /**
+     * Rezerwacja bez decyzji, której termin minął, wygasa: termin się zwalnia, a opłacona zaliczka wraca do klienta
+     * (zgłoszenie do payment-service jak przy anulowaniu). Status to „Anulowana” z powodem w {@code cancelReason}.
+     */
+    @Scheduled(fixedDelayString = "${rynek.bookings.expiry-check:60s}", initialDelayString = "${rynek.bookings.expiry-check:60s}")
+    public void expireUndecided() {
+        for (UUID id : bookings.findUndecidedPast(clock.instant())) {
+            try {
+                cancelled(id, b -> b.getStatus() == BookingStatus.REQUESTED || b.getStatus() == BookingStatus.PROPOSED, CancelledBy.SYSTEM,
+                        "Termin minął, zanim rezerwacja została potwierdzona. Rezerwacja wygasła.");
+                log.info("Rezerwacja {} wygasła: termin minął bez decyzji", id);
+            } catch (ResponseStatusException e) {
+                log.debug("Rezerwacja {} nie wygasła: {}", id, e.getReason());
+            }
+        }
+    }
+
     @Scheduled(fixedDelayString = "${rynek.bookings.payment-retry:60s}", initialDelayString = "${rynek.bookings.payment-retry:60s}")
     public void notifyPaymentPending() {
         bookings.findPaymentUnnotified().forEach(this::notifyPayment);

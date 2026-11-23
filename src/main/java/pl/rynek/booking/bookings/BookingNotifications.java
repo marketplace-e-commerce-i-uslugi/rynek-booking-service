@@ -54,7 +54,9 @@ class BookingNotifications {
     void cancelled(Booking b, CancelledBy by) {
         switch (by) {
             case PROVIDER -> toCustomer(b, "Usługodawca anulował rezerwację na " + when(b) + ". Zaliczka wraca do Ciebie.", "cancelled");
-            case SYSTEM -> toCustomer(b, "Rezerwacja wygasła, bo nie wpłacono zaliczki w terminie.", "cancelled");
+            case SYSTEM -> toCustomer(b, b.getPaymentId() == null && b.getDeposit() > 0
+                    ? "Rezerwacja wygasła, bo nie wpłacono zaliczki w terminie."
+                    : "Rezerwacja na " + when(b) + " wygasła, bo termin minął bez potwierdzenia." + (b.getPaymentId() != null ? " Zaliczka wraca do Ciebie." : ""), "cancelled");
             // Rezerwacja czekająca na zaliczkę nie dotarła jeszcze do usługodawcy, więc nie ma o czym go informować.
             case CUSTOMER -> {
                 if (b.getDeposit() == 0 || b.getPaymentId() != null) {
